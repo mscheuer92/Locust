@@ -1,44 +1,37 @@
 import logging
-from locust import HttpUser, task, between, events
+import login_credentials
+from locust import HttpUser, task, between
 
 
 class UserBehavior(HttpUser):
     wait_time = between(0.5, 1)
-    host = "<URL here>"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(args, kwargs)
-        self.stats = None
-
-    def on_start(self):
-        # Called when Locust is started before tasks are schedule
-        pass
-
-    def on_stop(self):
-        # Called when TaskSet is stopping
-        pass
+    host = "<URL>"
 
     @task
-    def token_endpoint(self):
-        self.client.get("<URI HERE>")
+    def v1_token_endpoint(self):
+        CLIENT_ID = login_credentials.CLIENT_ID
+        PASSWORD = login_credentials.CLIENT_SECRET
+        url = "<URL for login>"
+        url = url + "&client_id=" + CLIENT_ID + "&client_secret=" + PASSWORD
 
-    @task
-    def auth_title(self):
-        with self.client.get("<URI here>", name="<URI here>", catch_response=True) as \
+        with self.client.post(url, name="v1/token", catch_response=True) as \
                 response:
             # check for response content
-            if '{"email":<"expected response here">}' not in response.text:
-                response.failure = "Incorrect response for email"
-            if response.status_code != 200:
-                response.failure = "Incorrect response code for email"
+            if 'token' not in response.text:
+                logging.info("Response text is %s", response.text)
+                response.failure = "Incorrect Response for v1/Token Endpoint"
+            if response.status_code != 201:
+                response.failure = "Incorrect response code for token"
 
-    @events.test_stop.add_listener
-    def _(environment):
-        if environment.stats.total.fail.ratio > 0.01:
-            logging.error("Test failed due to failure ratio > 1%")
-            environment.process_exit_code = 1
-        elif environment.stats.total.avg_response_time > 200:
-            logging.error("Test failed due to average response time ratio > 200 ns")
-            environment.process_exit_code = 1
-        else:
-            environment.process_exit_code = 0
+    @task
+    def v2_token_endpoint(self):
+        self.CLIENT_ID = login_credentials.CLIENT_ID
+        self.CLIENT_SECRET = login_credentials.CLIENT_SECRET
+        self.secrets_body = {"client_id": self.CLIENT_ID,"client_secret": self.CLIENT_SECRET}
+        url = "<URL for login>"
+        with self.client.post(url, name="v2/token", data=self.secrets_body, catch_response=True) as response:
+            if 'token' not in response.text:
+                logging.info("Response text is %s", response.text)
+                response.failure = "Incorrect response code for v2/Token endpoint"
+            if response.status_code != 201:
+                response.failure = "Incorrect response code for token"
